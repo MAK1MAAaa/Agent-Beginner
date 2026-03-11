@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Agent Beginner Study Tasks"
 requires-python = ">=3.10"
 dependencies = [
+    "pandas>=2.3.3",
     "requests>=2.31.0",
     "streamlit>=1.30.0",
 ]
