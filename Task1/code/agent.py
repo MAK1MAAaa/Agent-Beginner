@@ -3,7 +3,7 @@ import requests
 import os
 import sys
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 确保 code 目录在 path 中
 current_dir = os.path.dirname(__file__)
@@ -45,23 +45,42 @@ TOOLS = [
     }
 ]
 
-SYSTEM_PROMPT = f"""你是一个个人日程助手。当前时间是: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}。
-你可以执行以下工具来管理用户的日程：
+def get_system_prompt():
+    now = datetime.now()
+    tomorrow = now + timedelta(days=1)
+    
+    time_context = {
+        "full_now": now.strftime('%Y-%m-%d %H:%M:%S'),
+        "weekday": now.strftime('%A'),
+        "today": now.strftime('%Y-%m-%d'),
+        "tomorrow": tomorrow.strftime('%Y-%m-%d'),
+    }
+    
+    prompt = f"""你是一个专业、严谨的个人日程助手。
+当前精确时间信息如下：
+- 当前完整时间: {time_context['full_now']}
+- 今天是: {time_context['weekday']} ({time_context['today']})
+- 明天是: {time_context['tomorrow']}
+
+你的任务是根据用户的输入管理日程。
+你可以执行以下工具：
 {{tools_description}}
 
-回复格式要求：
-思考: <你的思考过程，包括分析用户意图、判断需要调用哪个工具以及参数提取>
-调用工具: <工具名>(<参数1>=<值1>, <参数2>=<值2>)
-或者（当任务完成或需要用户反馈时）：
-回复: <你对用户的回复>
+核心原则：
+1. **时间转换**：必须结合当前时间，将相对时间词汇转换为确切的 'YYYY-MM-DD HH:MM' 格式。
+2. **ReAct 格式**：
+   思考: <分析意图并提取具体的 time 和 task>
+   调用工具: tool_name(key1="value1", key2="value2")
+   (等待结果)
+   思考: <判断是否需要下一步操作>
+   回复: <给用户的最终回答>
 
-注意：
-1. 你的目的是将用户提供的信息转换为结构化的日程。
-2. 调用工具后，你会得到执行结果（Observation），请根据结果决定下一步操作。
-3. 如果调用工具返回错误（例如文件不存在），请尝试其他可能的方法或告知用户。
-4. 调用工具时，参数值务必用引号包裹，例如: add_schedule(time="2024-12-01 10:00", task="任务名")
-5. 每次只调用一个工具。
+示例：
+调用工具: add_schedule(time="2024-12-01 10:00", task="周会")
+
+注意：参数名必须匹配工具定义中的参数名（如 time, task, event_id, file_path）。不要使用“参数”作为键名。
 """
+    return prompt
 
 def build_tools_description():
     desc = ""
@@ -82,57 +101,54 @@ def call_ollama(messages):
         return f"错误：调用 Ollama 失败: {str(e)}"
 
 def execute_tool(tool_call_str):
-    # 增加正则表达式容错性，支持 key=value 以及 key="value"
     match = re.search(r"(\w+)\s*\((.*)\)", tool_call_str)
     if not match:
-        return f"工具调用格式错误: '{tool_call_str}'。格式应为 tool_name(param1=val1, ...)"
+        return f"工具调用格式错误: '{tool_call_str}'"
     
     name, args_str = match.groups()
     kwargs = {}
     if args_str:
-        # 支持复杂的参数提取，包括可能带有空格或特殊符号的值
-        # 先寻找 key= 的模式，然后尝试提取之后的值直到下一个 key= 或末尾
+        # 提取键值对
         pairs = re.findall(r"(\w+)\s*=\s*['\"]?([^,'\"]*)['\"]?", args_str)
         for k, v in pairs:
             kwargs[k] = v.strip()
 
     print(f"  --> 执行工具: {name} (参数: {kwargs})")
     
-    if name == "add_schedule":
-        return add_schedule(**kwargs)
-    elif name == "list_schedules":
-        return list_schedules()
-    elif name == "delete_schedule":
-        return delete_schedule(**kwargs)
-    elif name == "read_document":
-        return read_document(**kwargs)
-    return f"未知工具: {name}"
+    try:
+        if name == "add_schedule":
+            # 兼容性处理：如果模型依然用了错误的参数名
+            if "time" not in kwargs and len(kwargs) > 0:
+                return "错误：add_schedule 需要 'time' 和 'task' 参数，请检查调用格式。"
+            return add_schedule(**kwargs)
+        elif name == "list_schedules":
+            return list_schedules()
+        elif name == "delete_schedule":
+            return delete_schedule(**kwargs)
+        elif name == "read_document":
+            return read_document(**kwargs)
+        return f"未知工具: {name}"
+    except TypeError as e:
+        return f"工具调用参数错误: {str(e)}。请确保使用工具定义中指定的参数名。"
 
 def run_agent(user_input):
     messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.format(tools_description=build_tools_description())},
+        {"role": "system", "content": get_system_prompt().format(tools_description=build_tools_description())},
         {"role": "user", "content": user_input}
     ]
     
-    print(f"User: {user_input}")
-    
     for _ in range(5):
         response = call_ollama(messages)
-        print(f"Assistant:\n{response}")
         messages.append({"role": "assistant", "content": response})
         
         if "调用工具:" in response:
-            tool_call_line = [line for line in response.split('\n') if "调用工具:" in line][0]
+            lines = response.split('\n')
+            tool_call_line = [line for line in lines if "调用工具:" in line][0]
             tool_call_str = tool_call_line.replace("调用工具:", "").strip()
             
             observation = execute_tool(tool_call_str)
-            print(f"Observation: {observation}")
             messages.append({"role": "user", "content": f"工具执行结果: {observation}"})
         elif "回复:" in response:
             break
         else:
             break
-
-if __name__ == "__main__":
-    test_text = "帮我读取 note.md 里的日程"
-    run_agent(test_text)
