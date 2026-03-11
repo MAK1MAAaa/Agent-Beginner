@@ -99,3 +99,7 @@ InitTestScene*.unity*
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
 .idea/
+.venv/
+
+Task1/test/uploads/
+Task1/data/
