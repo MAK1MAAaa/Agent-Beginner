@@ -1,7 +1,8 @@
 import json
 import os
 
-DB_FILE = "schedules.json"
+# 将数据文件存放在 ../test/ 目录下
+DB_FILE = os.path.join(os.path.dirname(__file__), "..", "test", "schedules.json")
 
 def load_schedules():
     if not os.path.exists(DB_FILE):
@@ -10,6 +11,7 @@ def load_schedules():
         return json.load(f)
 
 def save_schedules(schedules):
+    os.makedirs(os.path.dirname(DB_FILE), exist_ok=True)
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(schedules, f, ensure_ascii=False, indent=2)
 

@@ -1,5 +1,11 @@
 import json
 import requests
+import os
+import sys
+
+# 确保 code 目录在 path 中
+sys.path.append(os.path.dirname(__file__))
+
 from schedule_manager import add_schedule, list_schedules, update_schedule, delete_schedule
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
@@ -58,16 +64,15 @@ def call_ollama(messages):
     return response.json()["message"]["content"]
 
 def execute_tool(tool_call_str):
-    # 简单的解析器，示例：add_schedule(time='2024-12-01 10:00', task='开会')
     import re
     match = re.match(r"(\w+)\((.*)\)", tool_call_str)
     if not match:
         return "工具调用格式错误"
     
     name, args_str = match.groups()
-    # 粗略解析参数，实际生产环境建议用更严谨的解析
     kwargs = {}
     if args_str:
+        # 更健壮的正则，支持双引号和单引号
         pairs = re.findall(r"(\w+)=['\"]?([^,'\"]+)['\"]?", args_str)
         for k, v in pairs:
             kwargs[k] = v
@@ -78,8 +83,6 @@ def execute_tool(tool_call_str):
         return list_schedules()
     elif name == "update_schedule":
         return update_schedule(**kwargs)
-    elif name == "delete_schedule":
-        return delete_schedule(**kwargs)
     return f"未知工具: {name}"
 
 def run_agent(user_input):
@@ -90,7 +93,6 @@ def run_agent(user_input):
     
     print(f"User: {user_input}")
     
-    # ReAct 循环 (最多 3 次，防止死循环)
     for _ in range(3):
         response = call_ollama(messages)
         print(f"Assistant: {response}")
@@ -107,6 +109,5 @@ def run_agent(user_input):
             break
 
 if __name__ == "__main__":
-    # 测试用例：模拟从聊天记录中提取
     test_text = "小明在群里说：明天下午两点记得在会议室开周会。帮我记一下。"
     run_agent(test_text)
