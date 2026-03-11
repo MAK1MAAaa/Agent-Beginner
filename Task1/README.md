@@ -1,30 +1,41 @@
-# Task 1: 智能体体验与原理初探
+# Task 1: 智能体体验与原理初探 —— 个人日程助手
 
 ## 任务目标
-搭建一个个人日程助手智能体，能够从聊天记录、飞书文档或 Markdown 笔记中创建和修改日程。
+搭建一个具备 ReAct (Reason + Act) 能力的个人日程助手，能够：
+1. 从聊天记录中提取日程。
+2. 从上传的 Markdown 笔记中解析日程。
+3. 执行添加、查看、修改等工具。
+4. 提供简单的 Web 界面。
+
+## 核心实现方案
+- **模型**: Ollama 运行的 `qwen2.5-coder:7b`。
+- **ReAct 逻辑**: 
+  - **Reason**: 模型生成思考过程，分析意图与参数。
+  - **Act**: 生成 `调用工具: add_schedule(time="...", task="...")` 格式。
+  - **Observation**: 脚本拦截工具调用，执行 Python 代码并将结果注入 Context。
+- **时间感知**: SYSTEM PROMPT 动态注入系统当前日期，帮助模型理解“明天”、“下周”等相对概念。
+- **文件处理**: 支持读取本地 `test/` 目录下文件，或通过 Streamlit 上传 MD 文件并注入 Prompt。
 
 ## 目录结构
-- `code/`: 存放智能体核心代码。
-  - `agent.py`: Agent 主程序，包含 ReAct 循环逻辑。
-  - `schedule_manager.py`: 日程管理工具实现。
-- `test/`: 存放测试生成的文件，如 `schedules.json`。
-- `README.md`: 实验记录。
+- `code/`:
+  - `agent.py`: Agent 核心逻辑 (ReAct 循环)。
+  - `schedule_manager.py`: 工具函数定义 (CRUD + 文件读取)。
+  - `web_app.py`: 基于 Streamlit 的 Web 交互界面。
+- `test/`:
+  - `schedules.json`: 存储日程数据的数据库。
+  - `note.md`: 测试用的示例笔记。
 
-## 核心实现
-1. **ReAct 循环**:
-   - **Reason**: 模型思考当前用户需求。
-   - **Action**: 模型根据思考决定调用 `add_schedule` 或 `list_schedules`。
-   - **Observation**: 脚本执行工具函数，并将结果返回给模型。
-2. **工具集**:
-   - `add_schedule`: 解析时间与任务并存储。
-   - `list_schedules`: 列出当前所有日程。
-   - `update_schedule`: 修改已有日程。
+## 如何运行
+1. **安装依赖**:
+   ```bash
+   uv sync
+   ```
+2. **启动 Web 界面**:
+   ```bash
+   uv run streamlit run Task1/code/web_app.py
+   ```
 
-## 环境配置
-- 模型：Ollama `qwen2.5-coder:7b`
-- 依赖管理：`uv` (通过 `pyproject.toml`)
-
-## 运行方式
-```bash
-uv run python Task1/code/agent.py
-```
+## 实验收获
+- 验证了 `qwen2.5-coder` 对 ReAct 范式的支持非常稳定。
+- 意识到 SYSTEM PROMPT 中提供“当前时间上下文”对于处理日程类任务至关重要。
+- 通过手动实现 ReAct 循环，深入理解了 Agent 是如何通过迭代逐步完成复杂任务（如：读文件 -> 解析 -> 多次添加 -> 回复）的。

@@ -2,11 +2,13 @@ import json
 import requests
 import os
 import sys
+import re
+from datetime import datetime
 
 # 确保 code 目录在 path 中
 sys.path.append(os.path.dirname(__file__))
 
-from schedule_manager import add_schedule, list_schedules, update_schedule, delete_schedule
+from schedule_manager import add_schedule, list_schedules, update_schedule, delete_schedule, read_document
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
 MODEL = "qwen2.5-coder:7b"
@@ -33,19 +35,37 @@ TOOLS = [
             "time": "新的时间 (可选)",
             "task": "新的任务内容 (可选)"
         }
+    },
+    {
+        "name": "delete_schedule",
+        "description": "删除指定的日程 ID",
+        "parameters": {
+            "event_id": "日程 ID"
+        }
+    },
+    {
+        "name": "read_document",
+        "description": "读取 test 目录下的 Markdown 或聊天记录文档",
+        "parameters": {
+            "file_path": "文件名，例如: 'note.md' 或 'chat.txt'"
+        }
     }
 ]
 
-SYSTEM_PROMPT = """你是一个个人日程助手。你可以通过工具来管理用户的日程。
-你可以执行以下工具：
-{tools_description}
+SYSTEM_PROMPT = f"""你是一个个人日程助手。当前时间是: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}。
+你可以执行以下工具来管理用户的日程：
+{{tools_description}}
 
-回复格式：
-思考: <思考过程>
+回复格式要求：
+思考: <你的思考过程，包括分析用户意图、判断需要调用哪个工具以及参数提取>
 调用工具: <工具名>(<参数1>=<值1>, <参数2>=<值2>)
-或者回复结果给用户。
+或者（当任务完成或需要用户反馈时）：
+回复: <你对用户的回复>
 
-当用户提供一段文本（如聊天记录或笔记）时，请识别其中包含的日程信息，并调用相应工具。
+注意：
+1. 如果用户让你从某个文件中提取日程，请先调用 `read_document`。
+2. 调用工具后，你会得到执行结果（Observation），请根据结果决定下一步操作（是继续调用工具还是回复用户）。
+3. 务必根据当前时间准确计算“明天”、“下周”等相对时间。
 """
 
 def build_tools_description():
@@ -60,29 +80,37 @@ def call_ollama(messages):
         "messages": messages,
         "stream": False
     }
-    response = requests.post(OLLAMA_URL, json=payload)
-    return response.json()["message"]["content"]
+    try:
+        response = requests.post(OLLAMA_URL, json=payload, timeout=30)
+        return response.json()["message"]["content"]
+    except Exception as e:
+        return f"错误：调用 Ollama 失败: {str(e)}"
 
 def execute_tool(tool_call_str):
-    import re
-    match = re.match(r"(\w+)\((.*)\)", tool_call_str)
+    match = re.search(r"(\w+)\((.*)\)", tool_call_str)
     if not match:
         return "工具调用格式错误"
     
     name, args_str = match.groups()
     kwargs = {}
     if args_str:
-        # 更健壮的正则，支持双引号和单引号
-        pairs = re.findall(r"(\w+)=['\"]?([^,'\"]+)['\"]?", args_str)
+        # 支持 key=value, key="value", key='value'
+        pairs = re.findall(r"(\w+)\s*=\s*['\"]?([^,'\"]*)['\"]?", args_str)
         for k, v in pairs:
-            kwargs[k] = v
+            kwargs[k] = v.strip()
 
+    print(f"  --> 执行工具: {name} (参数: {kwargs})")
+    
     if name == "add_schedule":
         return add_schedule(**kwargs)
     elif name == "list_schedules":
         return list_schedules()
     elif name == "update_schedule":
         return update_schedule(**kwargs)
+    elif name == "delete_schedule":
+        return delete_schedule(**kwargs)
+    elif name == "read_document":
+        return read_document(**kwargs)
     return f"未知工具: {name}"
 
 def run_agent(user_input):
@@ -93,9 +121,9 @@ def run_agent(user_input):
     
     print(f"User: {user_input}")
     
-    for _ in range(3):
+    for _ in range(5): # 增加迭代次数以支持复杂任务
         response = call_ollama(messages)
-        print(f"Assistant: {response}")
+        print(f"Assistant:\n{response}")
         messages.append({"role": "assistant", "content": response})
         
         if "调用工具:" in response:
@@ -105,9 +133,17 @@ def run_agent(user_input):
             observation = execute_tool(tool_call_str)
             print(f"Observation: {observation}")
             messages.append({"role": "user", "content": f"工具执行结果: {observation}"})
+        elif "回复:" in response:
+            break
         else:
+            # 如果模型没有按格式回复，也跳出
             break
 
 if __name__ == "__main__":
-    test_text = "小明在群里说：明天下午两点记得在会议室开周会。帮我记一下。"
-    run_agent(test_text)
+    # 可以通过交互模式运行，或者运行特定测试
+    if len(sys.argv) > 1:
+        run_agent(" ".join(sys.argv[1:]))
+    else:
+        # 默认演示
+        print("--- 演示 1: 提取日程 ---")
+        run_agent("我刚才在 note.md 记了一些日程，帮我同步到日程表里。")
