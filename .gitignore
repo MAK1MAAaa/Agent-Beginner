@@ -98,8 +98,41 @@ InitTestScene*.unity*
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
-.idea/
-.venv/
+# Python / Streamlit
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+site/
+*.egg-info/
+.streamlit/secrets.toml
 
-Task1/test/uploads/
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Tool caches
+.uv-cache/
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Project runtime data
 Task1/data/
+Task1/code/.env
