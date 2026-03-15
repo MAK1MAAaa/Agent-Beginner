@@ -1,0 +1,25 @@
+name: deep_research_agent
+max_context_tokens: 32000
+max_iterations: 6
+system_prompt: deep_research_lite.md
+system_prompt_type: jinja
+tool_call_mode: xml
+llm_config:
+  temperature: 0.2
+  max_tokens: 2048
+  timeout: 240
+tools:
+  - name: Search
+    yaml_path: ./tools/Search.tool.yaml
+    binding: nexdr.agents.deep_research.search:search
+  - name: handoff_to_report_writer
+    yaml_path: ./tools/ReportWrite.tool.yaml
+    binding: nexdr.agents.deep_research.handoff_to_reporter:handoff_to_report_writer
+sub_agents:
+  - name: VisitPage
+    config_path: ../doc_reader/doc_read_agent.yaml
+stop_tools: [handoff_to_report_writer]
+middlewares:
+  - import: nexdr.agents.hooks:LoggingMiddleware
+    params:
+      log_model_calls: false

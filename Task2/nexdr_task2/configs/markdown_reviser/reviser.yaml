@@ -1,0 +1,12 @@
+name: markdown_reviser
+max_context_tokens: 120000
+system_prompt: reviser.md
+system_prompt_type: jinja
+llm_config:
+  temperature: 0.4
+  max_tokens: 8192
+  timeout: 600
+middlewares:
+  - import: nexdr.agents.hooks:LoggingMiddleware
+    params:
+      log_model_calls: true

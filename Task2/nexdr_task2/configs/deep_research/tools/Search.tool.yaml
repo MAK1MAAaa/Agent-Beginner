@@ -1,0 +1,85 @@
+name: Search
+description: >-
+  - Allows Agent to search across multiple sources and use the results to inform responses
+  - Provides up-to-date information for current events and recent data
+  - Returns search result information formatted as search result blocks
+  - Use this tool for accessing information beyond Agent's knowledge cutoff
+  - Supports multiple search sources: Semantic Scholar papers and Arxiv academic papers
+
+  Usage notes:
+    - Choose appropriate search source based on your needs:
+      * Semantic Scholar: Use when user wants to query research papers with abstracts and metadata
+      * Legacy web: Alias of semantic_scholar for backward compatibility
+      * Arxiv search: Use when user wants to query academic papers, research papers, technical publications
+
+input_schema:
+  type: object
+  properties:
+    query:
+      type: string
+      description: Search query string
+    
+    search_source:
+      type: string
+      enum:
+        - semantic_scholar
+        - web
+        - arxiv
+      default: semantic_scholar
+      description: |
+        Search source to use:
+        - semantic_scholar: Semantic Scholar Graph API paper search
+        - web: legacy alias of semantic_scholar
+        - arxiv: Arxiv repository for academic papers
+    
+    num_results:
+      type: integer
+      default: 10
+      description: Number of results to return
+    
+    web_search_type:
+      type: string
+      enum:
+        - search
+      default: search
+      description: |
+        Legacy compatibility option (only used when search_source is 'web'):
+        - search: maps to semantic_scholar query
+    
+    arxiv_categories:
+      type: array
+      items:
+        type: string
+      description: |
+        Arxiv category codes to filter by discipline (only used when search_source is 'arxiv'):
+        Common: cs.AI (AI), cs.LG (ML), cs.CL (NLP), cs.CV (Vision), stat.ML (Stats)
+        Format: subject.subcategory
+    
+    arxiv_sort_by:
+      type: string
+      enum:
+        - submittedDate
+        - lastUpdatedDate
+        - relevance
+      default: relevance
+      description: |
+        Arxiv result ordering (only used when search_source is 'arxiv'):
+        - relevance: Best match first (default)
+        - submittedDate: Historical order
+        - lastUpdatedDate: Latest updates first
+    
+    arxiv_sort_order:
+      type: string
+      enum:
+        - ascending
+        - descending
+      default: descending
+      description: |
+        Arxiv sort direction (only used when search_source is 'arxiv'):
+        - descending: Highest/newest first (default)
+        - ascending: Oldest first (for historical analysis)
+  
+  required:
+    - query
+  additionalProperties: false
+  $schema: http://json-schema.org/draft-07/schema#
